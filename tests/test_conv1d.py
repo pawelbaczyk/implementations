@@ -1,44 +1,132 @@
 from conv1d import conv1d
+from collections import namedtuple
 import unittest
 import torch
 import torch.nn.functional as F
+from parameterized import parameterized
+
+
+SampleData = namedtuple("SampleData", ["input", "weight", "bias", "stride", "padding",
+                                       "expected_result"])
+
+examples = [
+            SampleData(
+                input=torch.tensor([[[3, 2, 1, 5, 6, 7]], [[2, 3, 4, 0, -1, 0]]],
+                                   dtype=torch.float),
+                weight=torch.tensor([[[1, 2, 3]]], dtype=torch.float),
+                bias=torch.tensor([4], dtype=torch.float),
+                stride=1,
+                padding=0,
+                expected_result=[[[14, 23, 33, 42]], [[24, 15, 5, 2]]]
+            ),
+            SampleData(
+                input=torch.tensor([[[3, 2, 1, 5, 6, 7]], [[2, 3, 4, 0, -1, 0]]],
+                                   dtype=torch.float),
+                weight=torch.tensor([[[1, 2, 3]]], dtype=torch.float),
+                bias=torch.tensor([4], dtype=torch.float),
+                stride=2,
+                padding=0,
+                expected_result=[[[14, 33]], [[24, 5]]]
+            ),
+            SampleData(
+                input=torch.tensor([[[3, 2, 1, 5, 6, 7]], [[2, 3, 4, 0, -1, 0]]],
+                                   dtype=torch.float),
+                weight=torch.tensor([[[1, 2, 3]]], dtype=torch.float),
+                bias=torch.tensor([4], dtype=torch.float),
+                stride=2,
+                padding=1,
+                expected_result=[[[16, 23, 42]], [[17, 15, 2]]]
+            ),
+            SampleData(
+                input=torch.tensor([[[3, 2, 1, 5, 6, 7]], [[2, 3, 4, 0, -1, 0]]],
+                                   dtype=torch.float),
+                weight=torch.tensor([[[1, 2, 3]]], dtype=torch.float),
+                bias=None,
+                stride=1,
+                padding=0,
+                expected_result=[[[10, 19, 29, 38]], [[20, 11, 1, -2]]]
+            ),
+            SampleData(
+                input=torch.tensor([[[3, 2, 1, 5, 6, 7], [0, 1, 0, -1, 0, 0]],
+                                    [[2, 3, 4, 0, -1, 0], [1, 1, 1, -1, -1, -1]]],
+                                   dtype=torch.float),
+                weight=torch.tensor([[[1, 2, 3], [1, 0, -1]]], dtype=torch.float),
+                bias=torch.tensor([4], dtype=torch.float),
+                stride=1,
+                padding=0,
+                expected_result=[[[14, 25, 33, 41]], [[24, 17, 7, 2]]]
+            ),
+            SampleData(
+                input=torch.tensor([[[3, 2, 1, 5, 6, 7], [0, 1, 0, -1, 0, 0]],
+                                    [[2, 3, 4, 0, -1, 0], [1, 1, 1, -1, -1, -1]]],
+                                   dtype=torch.float),
+                weight=torch.tensor([[[1, 2, 3], [1, 0, -1]]], dtype=torch.float),
+                bias=torch.tensor([4], dtype=torch.float),
+                stride=2,
+                padding=0,
+                expected_result=[[[14, 33]], [[24, 7]]]
+            ),
+            SampleData(
+                input=torch.tensor([[[3, 2, 1, 5, 6, 7], [0, 1, 0, -1, 0, 0]],
+                                    [[2, 3, 4, 0, -1, 0], [1, 1, 1, -1, -1, -1]]],
+                                   dtype=torch.float),
+                weight=torch.tensor([[[1, 2, 3], [1, 0, -1]]], dtype=torch.float),
+                bias=torch.tensor([4], dtype=torch.float),
+                stride=2,
+                padding=2,
+                expected_result=[[[13, 14, 33, 24]], [[9, 24, 7, 2]]]
+            ),
+            SampleData(
+                input=torch.tensor([[[3, 2, 1, 5, 6, 7], [0, 1, 0, -1, 0, 0]],
+                                    [[2, 3, 4, 0, -1, 0], [1, 1, 1, -1, -1, -1]]],
+                                   dtype=torch.float),
+                weight=torch.tensor([[[1, 2, 3], [1, 0, -1]]], dtype=torch.float),
+                bias=None,
+                stride=1,
+                padding=0,
+                expected_result=[[[10, 21, 29, 37]], [[20, 13, 3, -2]]]
+            ),
+            SampleData(
+                input=torch.tensor([[[3, 2, 1, 5, 6, 7], [0, 1, 0, -1, 0, 0]],
+                                    [[2, 3, 4, 0, -1, 0], [1, 1, 1, -1, -1, -1]]],
+                                   dtype=torch.float),
+                weight=torch.tensor([[[1, 2, 3], [1, 0, -1]], [[0, 0, 1], [1, 0, 0]]],
+                                    dtype=torch.float),
+                bias=torch.tensor([4, 3], dtype=torch.float),
+                stride=1,
+                padding=0,
+                expected_result=[[[14, 25, 33, 41], [4, 9, 9, 9]], [[24, 17, 7, 2], [8, 4, 3, 2]]]
+            ),
+            SampleData(
+                input=torch.tensor([[[3, 2, 1, 5, 6, 7], [0, 1, 0, -1, 0, 0]],
+                                    [[2, 3, 4, 0, -1, 0], [1, 1, 1, -1, -1, -1]]],
+                                   dtype=torch.float),
+                weight=torch.tensor([[[1, 2, 3], [1, 0, -1]], [[0, 0, 1], [1, 0, 0]]],
+                                    dtype=torch.float),
+                bias=torch.tensor([4, 3], dtype=torch.float),
+                stride=2,
+                padding=0,
+                expected_result=[[[14, 33], [4, 9]], [[24, 7], [8, 3]]]
+            ),
+            SampleData(
+                input=torch.tensor([[[3, 2, 1, 5, 6, 7], [0, 1, 0, -1, 0, 0]],
+                                    [[2, 3, 4, 0, -1, 0], [1, 1, 1, -1, -1, -1]]],
+                                   dtype=torch.float),
+                weight=torch.tensor([[[1, 2, 3], [1, 0, -1]], [[0, 0, 1], [1, 0, 0]]],
+                                    dtype=torch.float),
+                bias=None,
+                stride=1,
+                padding=0,
+                expected_result=[[[10, 21, 29, 37], [1, 6, 6, 6]], [[20, 13, 3, -2], [5, 1, 0, -1]]]
+            )
+]
 
 
 class MyConv1dTestCase(unittest.TestCase):
-    def test_conv1d_1(self):
-        input = torch.tensor([[[3, 2, 1, 5, 6, 7]], [[2, 3, 4, 0, -1, 0]]], dtype=torch.float)
-        weight = torch.tensor([[[1, 2, 3]]], dtype=torch.float)
-        bias = torch.tensor([4], dtype=torch.float)
-        expected_result = [[[14, 23, 33, 42]], [[24, 15, 5, 2]]]
-
-        their_result = F.conv1d(input, weight, bias)
-        my_result = conv1d(input, weight, bias)
-
-        self.assertListEqual(their_result.tolist(), expected_result)
-        self.assertListEqual(my_result.tolist(), expected_result)
-
-    def test_conv1d_2(self):
-        input = torch.tensor([[[3, 2, 1, 5, 6, 7], [0, 1, 0, -1, 0, 0]],
-                              [[2, 3, 4, 0, -1, 0], [1, 1, 1, -1, -1, -1]]], dtype=torch.float)
-        weight = torch.tensor([[[1, 2, 3], [1, 0, -1]]], dtype=torch.float)
-        bias = torch.tensor([4], dtype=torch.float)
-        expected_result = [[[14, 25, 33, 41]], [[24, 17, 7, 2]]]
-
-        their_result = F.conv1d(input, weight, bias)
-        my_result = conv1d(input, weight, bias)
-
-        self.assertListEqual(their_result.tolist(), expected_result)
-        self.assertListEqual(my_result.tolist(), expected_result)
-
-    def test_conv1d_3(self):
-        input = torch.tensor([[[3, 2, 1, 5, 6, 7], [0, 1, 0, -1, 0, 0]],
-                              [[2, 3, 4, 0, -1, 0], [1, 1, 1, -1, -1, -1]]], dtype=torch.float)
-        weight = torch.tensor([[[1, 2, 3], [1, 0, -1]], [[0, 0, 1], [1, 0, 0]]], dtype=torch.float)
-        bias = torch.tensor([4, 3], dtype=torch.float)
-        expected_result = [[[14, 25, 33, 41], [4, 9, 9, 9]], [[24, 17, 7, 2], [8, 4, 3, 2]]]
-
-        their_result = F.conv1d(input, weight, bias)
-        my_result = conv1d(input, weight, bias)
+    @parameterized.expand([example._asdict().values() for example in examples])
+    def test_conv1d(self, input, weight, bias, stride, padding, expected_result):
+        their_result = F.conv1d(input, weight, bias, stride, padding)
+        my_result = conv1d(input, weight, bias, stride, padding)
 
         self.assertListEqual(their_result.tolist(), expected_result)
         self.assertListEqual(my_result.tolist(), expected_result)
