@@ -1,6 +1,4 @@
 import torch
-import math
-import torch.nn.functional as F
 
 
 def _test_tensor_shapes_for_conv(input: torch.Tensor,
@@ -21,7 +19,7 @@ def _test_tensor_shapes_for_conv(input: torch.Tensor,
                                f" size [{c_out}], but got size {list(bias.shape)} instead.")
 
 
-def conv2d(input: torch.Tensor,
+def convNd(input: torch.Tensor,
            weight: torch.Tensor,
            bias: torch.Tensor = None,
            stride: int = 1,
@@ -29,18 +27,16 @@ def conv2d(input: torch.Tensor,
 
     _test_tensor_shapes_for_conv(input, weight, bias)
 
-    c_out = weight.shape[0]
-    h_k = weight.shape[2]
-
     shape_out = torch.floor(
         (torch.tensor(input.shape[2:]) + 2 * padding - torch.tensor(weight.shape[2:])) / stride + 1
     ).int().tolist()
 
     if bias is None:
-        bias = torch.zeros(c_out)
+        bias = torch.zeros(weight.shape[0])
 
-    input = F.pad(input, (padding, padding) * (len(input.shape) - 2))
+    input = torch.nn.functional.pad(input, (padding, padding) * (len(input.shape) - 2))
 
+    h_k = weight.shape[2]
     h_out = shape_out[0]
     if len(input.shape) > 3:
         w_in = input.shape[3]
@@ -49,26 +45,19 @@ def conv2d(input: torch.Tensor,
     else:
         w_in = w_k = w_out = 1
 
-    i1 = torch.arange(w_k).repeat(h_k) + torch.repeat_interleave(torch.arange(0, w_in * h_k, w_in), w_k)
-    i2 = torch.arange(w_out).repeat(h_out) + torch.repeat_interleave(torch.arange(0, w_in * h_out, w_in), w_out)
+    indices_of_kernel_window = \
+        torch.arange(w_k).repeat(h_k) +\
+        torch.repeat_interleave(torch.arange(0, w_in * h_k, w_in), w_k)
 
-    i3 = i1.view(-1, 1) + i2.view(1, -1)
+    indices_of_window_positions = \
+        stride * (torch.arange(w_out).repeat(h_out) +
+                  torch.repeat_interleave(torch.arange(0, w_in * h_out, w_in), w_out))
 
-    input = torch.flatten(input, 2)[:, :, i3]
+    indices_of_entries_in_windows = \
+        indices_of_kernel_window.view(-1, 1) +\
+        indices_of_window_positions.view(1, -1)
 
-    return ((torch.flatten(weight, 2).transpose(0, 1) @ input).sum(axis=1) + bias.view(1, -1, 1)).unflatten(-1, shape_out)
+    input = torch.flatten(input, 2)[:, :, indices_of_entries_in_windows]
 
-input = torch.tensor([[[[0,1,2,3,4,5],[6,7,8,9,10,11],[12,13,14,15,16,17],[18,19,20,21,22,23]]]])
-weight = torch.tensor([[[[1,1,1],[1,1,1]]]])
-
-c = conv2d(input, weight)
-print(c)
-
-input = torch.tensor([[[3, 2, 1, 5, 6, 7]], [[2, 3, 4, 0, -1, 0]]])
-weight = torch.tensor([[[1, 2, 3]]])
-
-c = conv2d(input, weight)
-print(c)
-
-
-
+    weight_times_input = (torch.flatten(weight, 2).transpose(0, 1) @ input).sum(axis=1)
+    return (weight_times_input + bias.view(1, -1, 1)).unflatten(-1, shape_out)
