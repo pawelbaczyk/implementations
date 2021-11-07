@@ -1,6 +1,5 @@
 import numpy
 import numpy as np
-import numdifftools
 
 
 class HMC:
@@ -8,11 +7,20 @@ class HMC:
         self._probability = probability
         self._theta_m_minus_one = theta_zero
 
-    def _log_p(self, args, *kwargs):
-        return numpy.log(self._probability(args, *kwargs))
+    def _log_p(self, theta):
+        return numpy.log(self._probability(theta))
 
-    def _grad_of_log_p(self, args, *kwargs):
-        return numdifftools.Gradient(self._log_p)(args, *kwargs)
+    def _grad_of_log_p(self, theta):
+        return self._grad(self._log_p, theta)
+
+    @staticmethod
+    def _grad(func, x, epsilon=1e-9):
+        gradient = numpy.zeros_like(x, dtype=float)
+        for i in range(len(x)):
+            delta = numpy.zeros_like(x, dtype=float)
+            delta[i] = epsilon
+            gradient[i] = (func(x + delta) - func(x - delta)) / 2 / epsilon
+        return gradient
 
     def sample(self, number_of_samples, epsilon, L):
         samples = []
